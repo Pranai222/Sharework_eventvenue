@@ -196,7 +196,8 @@ public class EmailService {
         jakarta.mail.Session session = jakarta.mail.Session.getDefaultInstance(props, null);
 
         MimeMessage email = new MimeMessage(session);
-        email.setFrom(new jakarta.mail.internet.InternetAddress(fromEmail));
+        // Set custom display name: "EventVenue Team <noreply@eventvenue.com>"
+        email.setFrom(new jakarta.mail.internet.InternetAddress(fromEmail, appName));
         email.addRecipient(jakarta.mail.Message.RecipientType.TO, 
             new jakarta.mail.internet.InternetAddress(to));
         email.setSubject(subject);
