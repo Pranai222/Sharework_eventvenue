@@ -78,11 +78,15 @@ public class SecurityConfig {
         return http.build();
     }
 
+    @org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins}")
+    private String[] allowedOrigins;
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         // Use setAllowedOriginPatterns to avoid conflict with allowCredentials
-        configuration.setAllowedOriginPatterns(Arrays.asList("http://localhost:*"));
+        // If allowedOrigins comes from properties, use that. Fallback to localhost if needed, but properties usually handle the default.
+        configuration.setAllowedOriginPatterns(Arrays.asList(allowedOrigins));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         // Explicitly allow Authorization header
         configuration.setAllowedHeaders(Arrays.asList(
