@@ -19,11 +19,8 @@ public class FileUploadService {
     @Value("${file.upload.directory:uploads}")
     private String uploadDirectory;
 
-    @Value("${server.address:localhost}")
-    private String serverAddress;
-
-    @Value("${server.port:8080}")
-    private int serverPort;
+    @Value("${app.backend.url}")
+    private String backendUrl;
 
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     private static final String[] ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"};
@@ -47,8 +44,8 @@ public class FileUploadService {
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
         // Return URL
-        return String.format("http://%s:%d/uploads/%s/%s", 
-            serverAddress, serverPort, subDirectory, uniqueFilename);
+        return String.format("%s/uploads/%s/%s", 
+            backendUrl, subDirectory, uniqueFilename);
     }
 
     public List<String> uploadImages(MultipartFile[] files, String subDirectory) throws IOException {
