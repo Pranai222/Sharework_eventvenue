@@ -47,12 +47,13 @@ export default function AdminCreditRequestsPage() {
     })
 
     const loadRequests = async () => {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
         try {
             setIsLoading(true)
             setError(null)
             const endpoint = filter === 'pending'
-                ? 'http://localhost:8080/api/credit-requests/admin/pending'
-                : 'http://localhost:8080/api/credit-requests/admin/all'
+                ? `${API_URL}/api/credit-requests/admin/pending`
+                : `${API_URL}/api/credit-requests/admin/all`
 
             const response = await axios.get(endpoint, getAuthHeaders())
             let data = response.data
@@ -79,9 +80,10 @@ export default function AdminCreditRequestsPage() {
 
         setIsProcessing(true)
         try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
             const endpoint = actionType === 'approve'
-                ? `http://localhost:8080/api/credit-requests/admin/approve/${selectedRequest.id}`
-                : `http://localhost:8080/api/credit-requests/admin/reject/${selectedRequest.id}`
+                ? `${API_URL}/api/credit-requests/admin/approve/${selectedRequest.id}`
+                : `${API_URL}/api/credit-requests/admin/reject/${selectedRequest.id}`
 
             await axios.post(endpoint, {
                 adminId: (user as any)?.userId || (user as any)?.id || 1,

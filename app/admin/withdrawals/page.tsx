@@ -47,11 +47,12 @@ export default function AdminWithdrawalsPage() {
     })
 
     const loadRequests = async () => {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
         try {
             setIsLoading(true)
             setError(null)
             const response = await axios.get(
-                'http://localhost:8080/api/withdrawals/admin/pending-approvals',
+                `${API_URL}/api/withdrawals/admin/pending-approvals`,
                 getAuthHeaders()
             )
             setRequests(response.data.withdrawals || response.data || [])
@@ -71,9 +72,10 @@ export default function AdminWithdrawalsPage() {
 
         setIsProcessing(true)
         try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
             const endpoint = actionType === 'approve'
-                ? `http://localhost:8080/api/withdrawals/admin/approve/${selectedRequest.id}`
-                : `http://localhost:8080/api/withdrawals/admin/reject/${selectedRequest.id}`
+                ? `${API_URL}/api/withdrawals/admin/approve/${selectedRequest.id}`
+                : `${API_URL}/api/withdrawals/admin/reject/${selectedRequest.id}`
 
             await axios.post(endpoint, {
                 adminId: (user as any)?.userId || (user as any)?.id || 1,

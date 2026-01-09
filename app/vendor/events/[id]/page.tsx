@@ -189,7 +189,7 @@ export default function EditEventPage() {
           reason: "Schedule updated via edit form"
         }
 
-        const rescheduleResponse = await fetch(`http://localhost:8080/api/events/${eventId}/reschedule`, {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"; const rescheduleResponse = await fetch(`${API_URL}/api/events/${eventId}/reschedule`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
