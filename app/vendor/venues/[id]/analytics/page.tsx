@@ -65,7 +65,7 @@ export default function VenueAnalyticsPage() {
     const [showAllBookings, setShowAllBookings] = useState(false)
     const [showAllReviews, setShowAllReviews] = useState(false)
 
-    const API_BASE_URL = "http://localhost:8080"
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
     useEffect(() => {
         const loadData = async () => {

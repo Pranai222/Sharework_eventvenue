@@ -67,6 +67,7 @@ export default function VendorTransactionsPage() {
     }, [])
 
     const loadData = async () => {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
         try {
             const profileData = await authApi.getVendorProfile()
             setProfile(profileData as VendorProfile)
@@ -76,7 +77,7 @@ export default function VendorTransactionsPage() {
             if (vendorId) {
                 try {
                     const token = localStorage.getItem('auth_token')
-                    const txResponse = await fetch(`http://localhost:8080/api/vendor/transactions/${vendorId}`, {
+                    const txResponse = await fetch(`${API_URL}/api/vendor/transactions/${vendorId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     })
                     if (txResponse.ok) {
@@ -127,8 +128,9 @@ export default function VendorTransactionsPage() {
         setWithdrawError("")
 
         try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
             const token = localStorage.getItem('auth_token')
-            const response = await fetch('http://localhost:8080/api/withdrawals/submit', {
+            const response = await fetch(`${API_URL}/api/withdrawals/submit`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

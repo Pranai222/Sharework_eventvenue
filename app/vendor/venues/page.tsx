@@ -107,9 +107,10 @@ export default function VendorVenuesPage() {
   const handleCancelVenue = async () => {
     if (!venueToCancel || !cancelReason.trim()) return
     setIsCancelling(true)
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
     try {
       // Cancel all venue bookings and refund users
-      const response = await fetch(`http://localhost:8080/api/venues/${venueToCancel.id}/cancel`, {
+      const response = await fetch(`${API_URL}/api/venues/${venueToCancel.id}/cancel`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

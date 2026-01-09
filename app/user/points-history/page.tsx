@@ -52,6 +52,7 @@ export default function PointsHistoryPage() {
     }, [filteredHistory, showAll])
 
     const loadHistory = async () => {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
         try {
             const data = await pointsApi.getHistory()
             // Data is already sorted by createdAt DESC from backend
@@ -60,7 +61,7 @@ export default function PointsHistoryPage() {
             // Also fetch credit requests
             try {
                 const token = localStorage.getItem('auth_token')
-                const userProfile = await fetch('http://localhost:8080/api/user/profile', {
+                const userProfile = await fetch(`${API_URL}/api/user/profile`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 })
                 if (userProfile.ok) {
@@ -68,7 +69,7 @@ export default function PointsHistoryPage() {
                     const userId = profile.id || profile.userId
                     console.log('[PointsHistory] Fetching credit requests for userId:', userId)
                     if (userId) {
-                        const crResponse = await fetch(`http://localhost:8080/api/credit-requests/user/${userId}`, {
+                        const crResponse = await fetch(`${API_URL}/api/credit-requests/user/${userId}`, {
                             headers: { 'Authorization': `Bearer ${token}` }
                         })
                         console.log('[PointsHistory] Credit requests response status:', crResponse.status)
