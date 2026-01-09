@@ -19,8 +19,9 @@ public class FileUploadService {
     @Value("${file.upload.directory:uploads}")
     private String uploadDirectory;
 
-    @Value("${app.backend.url}")
-    private String backendUrl;
+    // Use dynamic URL generation based on current request
+    // @Value("${app.backend.url}")
+    // private String backendUrl;
 
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     private static final String[] ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"};
@@ -43,9 +44,9 @@ public class FileUploadService {
         Path filePath = uploadPath.resolve(uniqueFilename);
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
-        // Return URL
-        return String.format("%s/uploads/%s/%s", 
-            backendUrl, subDirectory, uniqueFilename);
+        // Return Dynamic URL
+        String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
+        return String.format("%s/uploads/%s/%s", baseUrl, subDirectory, uniqueFilename);
     }
 
     public List<String> uploadImages(MultipartFile[] files, String subDirectory) throws IOException {
