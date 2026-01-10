@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MapPinIcon } from '@heroicons/react/24/outline'
 import MapModal from './map-modal'
 
@@ -23,6 +23,10 @@ export default function LocationPicker({
 }: LocationPickerProps) {
     const [showMap, setShowMap] = useState(false)
     const [address, setAddress] = useState(value)
+
+    useEffect(() => {
+        setAddress(value)
+    }, [value])
 
     const handleAddressChange = (newAddress: string) => {
         setAddress(newAddress)

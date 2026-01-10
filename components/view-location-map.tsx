@@ -1,86 +1,102 @@
 ﻿"use client"
 
-import { useState } from 'react'
-import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api'
+import { useEffect, useState } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
+import dynamic from 'next/dynamic'
+import 'leaflet/dist/leaflet.css'
+import L from 'leaflet'
+
+// Fix for default markers
+const icon = L.icon({
+    iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+// Dynamically import map components to avoid SSR issues
+const MapContainer = dynamic(
+    () => import('react-leaflet').then((mod) => mod.MapContainer),
+    { ssr: false }
+)
+const TileLayer = dynamic(
+    () => import('react-leaflet').then((mod) => mod.TileLayer),
+    { ssr: false }
+)
+const Marker = dynamic(
+    () => import('react-leaflet').then((mod) => mod.Marker),
+    { ssr: false }
+)
+const Popup = dynamic(
+    () => import('react-leaflet').then((mod) => mod.Popup),
+    { ssr: false }
+)
+
+// Helper component to update map view
+const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }) => {
+    const { useMap } = require('react-leaflet')
+    const map = useMap()
+    map.setView(center, zoom)
+    return null
+}
 
 interface ViewLocationMapProps {
     address: string
     onClose: () => void
 }
 
-const libraries: ("places" | "geometry")[] = ["places"]
-
-const mapContainerStyle = {
-    width: '100%',
-    height: '400px'
-}
-
-const defaultCenter = {
-    lat: 28.6139, // Delhi, India
-    lng: 77.2090
-}
-
 export default function ViewLocationMap({ address, onClose }: ViewLocationMapProps) {
-    const [markerPosition, setMarkerPosition] = useState(defaultCenter)
-    const [map, setMap] = useState<google.maps.Map | null>(null)
+    const [position, setPosition] = useState<[number, number] | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
 
-    const { isLoaded, loadError } = useJsApiLoader({
-        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
-        libraries
-    })
+    useEffect(() => {
+        const geocodeAddress = async () => {
+            if (!address) {
+                setLoading(false)
+                return
+            }
 
-    // Geocode address when component loads
-    useState(() => {
-        if (isLoaded && address && window.google) {
-            const geocoder = new window.google.maps.Geocoder()
-            geocoder.geocode({ address }, (results, status) => {
-                if (status === 'OK' && results && results[0]) {
-                    const location = results[0].geometry.location
-                    const position = { lat: location.lat(), lng: location.lng() }
-                    setMarkerPosition(position)
-                    if (map) {
-                        map.panTo(position)
-                        map.setZoom(15)
-                    }
+            try {
+                // Nominatim API Search
+                // Add a small delay/debounce if needed, but for "view" mode usually fine to call once
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+                    { headers: { 'User-Agent': 'EventVenuePlatform/1.0' } }
+                )
+
+                const data = await response.json()
+
+                if (data && data.length > 0) {
+                    setPosition([parseFloat(data[0].lat), parseFloat(data[0].lon)])
+                } else {
+                    // Fallback: Try searching just the city part if the full address fails
+                    // Simple heuristic: take the last part of the string if it looks like "City, Country"
+                    // Or just fail gracefully
+                    setError('Location not found on map')
                 }
-            })
+            } catch (err) {
+                console.error("Geocoding error:", err)
+                setError('Failed to load location')
+            } finally {
+                setLoading(false)
+            }
         }
-    })
 
-    if (loadError) {
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-lg p-6 max-w-md w-full">
-                    <h3 className="text-lg font-semibold text-red-600 mb-2">Error Loading Map</h3>
-                    <p className="text-gray-600 mb-4">Could not load Google Maps. Please check your API key configuration.</p>
-                    <button onClick={onClose} className="w-full bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700">
-                        Close
-                    </button>
-                </div>
-            </div>
-        )
-    }
-
-    if (!isLoaded) {
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-8">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Loading map...</p>
-                </div>
-            </div>
-        )
-    }
+        geocodeAddress()
+    }, [address])
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 flex items-center justify-between">
+                <div className="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
                     <div>
                         <h2 className="text-xl font-bold text-white">Location</h2>
-                        <p className="text-green-100 text-sm">{address}</p>
+                        <p className="text-green-100 text-sm line-clamp-1">{address}</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -90,27 +106,45 @@ export default function ViewLocationMap({ address, onClose }: ViewLocationMapPro
                     </button>
                 </div>
 
-                {/* Map */}
-                <div className="relative">
-                    <GoogleMap
-                        mapContainerStyle={mapContainerStyle}
-                        zoom={15}
-                        center={markerPosition}
-                        onLoad={setMap}
-                        options={{
-                            streetViewControl: true,
-                            mapTypeControl: false,
-                            fullscreenControl: false,
-                        }}
-                    >
-                        <Marker position={markerPosition} />
-                    </GoogleMap>
+                {/* Map Container */}
+                <div className="relative w-full h-[400px] bg-gray-100">
+                    {loading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+                        </div>
+                    )}
+
+                    {!loading && error && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 p-4 text-center">
+                            <p>{error}</p>
+                            <p className="text-sm mt-2">({address})</p>
+                        </div>
+                    )}
+
+                    {!loading && position && (
+                        <MapContainer
+                            center={position}
+                            zoom={15}
+                            style={{ height: '100%', width: '100%' }}
+                        >
+                            <TileLayer
+                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            />
+                            <Marker position={position} icon={icon}>
+                                <Popup>
+                                    {address}
+                                </Popup>
+                            </Marker>
+                            <ChangeView center={position} zoom={15} />
+                        </MapContainer>
+                    )}
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 bg-gray-50 flex justify-between items-center">
-                    <div className="text-sm text-gray-600">
-                        <p className="font-medium">{address}</p>
+                <div className="px-6 py-4 bg-gray-50 flex justify-between items-center flex-shrink-0">
+                    <div className="text-sm text-gray-600 max-w-[70%]">
+                        <p className="font-medium truncate">{address}</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -123,3 +157,4 @@ export default function ViewLocationMap({ address, onClose }: ViewLocationMapPro
         </div>
     )
 }
+

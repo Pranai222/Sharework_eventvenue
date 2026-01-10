@@ -1,8 +1,68 @@
 ﻿"use client"
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { GoogleMap, Marker, Autocomplete, useJsApiLoader } from '@react-google-maps/api'
 import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import dynamic from 'next/dynamic'
+import 'leaflet/dist/leaflet.css'
+import L from 'leaflet'
+
+// Fix for default markers
+const icon = L.icon({
+    iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+// Dynamically import map components
+const MapContainer = dynamic(
+    () => import('react-leaflet').then((mod) => mod.MapContainer),
+    { ssr: false }
+)
+const TileLayer = dynamic(
+    () => import('react-leaflet').then((mod) => mod.TileLayer),
+    { ssr: false }
+)
+const Marker = dynamic(
+    () => import('react-leaflet').then((mod) => mod.Marker),
+    { ssr: false }
+)
+
+// Helper for map events (click to pick location)
+const MapEvents = ({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) => {
+    const { useMapEvents } = require('react-leaflet')
+    useMapEvents({
+        click(e: any) {
+            onMapClick(e.latlng.lat, e.latlng.lng)
+        },
+    })
+    return null
+}
+
+// Helper to update map view programmatically
+const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }) => {
+    const { useMap } = require('react-leaflet')
+    const map = useMap()
+    map.setView(center, zoom)
+    return null
+}
+
+// Use a simple debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+    const [debouncedValue, setDebouncedValue] = useState<T>(value);
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [value, delay]);
+    return debouncedValue;
+}
 
 interface MapModalProps {
     currentAddress: string
@@ -10,141 +70,87 @@ interface MapModalProps {
     onClose: () => void
 }
 
-const libraries: ("places" | "geometry")[] = ["places"]
-
-const mapContainerStyle = {
-    width: '100%',
-    height: '500px'
-}
-
-const defaultCenter = {
-    lat: 28.6139, // Delhi, India
-    lng: 77.2090
-}
-
 export default function MapModal({ currentAddress, onSelect, onClose }: MapModalProps) {
-    const [markerPosition, setMarkerPosition] = useState(defaultCenter)
-    const [selectedAddress, setSelectedAddress] = useState(currentAddress)
-    const [map, setMap] = useState<google.maps.Map | null>(null)
-    const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+    const [center, setCenter] = useState<[number, number]>([28.6139, 77.2090]) // Default: Delhi
+    const [markerPos, setMarkerPos] = useState<[number, number]>([28.6139, 77.2090])
+    const [query, setQuery] = useState(currentAddress || "")
+    const [selectedAddress, setSelectedAddress] = useState(currentAddress || "")
+    const [isSearching, setIsSearching] = useState(false)
 
-    const { isLoaded, loadError } = useJsApiLoader({
-        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
-        libraries
-    })
+    // Debounce the search query
+    const debouncedQuery = useDebounce(query, 1500)
 
-    // Geocode the current address on mount
+    // Initial load
     useEffect(() => {
-        if (isLoaded && currentAddress && window.google) {
-            const geocoder = new window.google.maps.Geocoder()
-            geocoder.geocode({ address: currentAddress }, (results, status) => {
-                if (status === 'OK' && results && results[0]) {
-                    const location = results[0].geometry.location
-                    const newPos = { lat: location.lat(), lng: location.lng() }
-                    setMarkerPosition(newPos)
-                    if (map) {
-                        map.panTo(newPos)
-                    }
-                }
-            })
-        }
-    }, [isLoaded, currentAddress, map])
-
-    const onMapClick = useCallback((e: google.maps.MapMouseEvent) => {
-        if (e.latLng) {
-            const lat = e.latLng.lat()
-            const lng = e.latLng.lng()
-            setMarkerPosition({ lat, lng })
-
-            // Reverse geocode to get address
-            const geocoder = new window.google.maps.Geocoder()
-            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-                if (status === 'OK' && results && results[0]) {
-                    setSelectedAddress(results[0].formatted_address)
-                }
-            })
+        if (currentAddress) {
+            handleSearch(currentAddress)
         }
     }, [])
 
-    const onMarkerDragEnd = useCallback((e: google.maps.MapMouseEvent) => {
-        if (e.latLng) {
-            const lat = e.latLng.lat()
-            const lng = e.latLng.lng()
-            setMarkerPosition({ lat, lng })
-
-            // Reverse geocode
-            const geocoder = new window.google.maps.Geocoder()
-            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-                if (status === 'OK' && results && results[0]) {
-                    setSelectedAddress(results[0].formatted_address)
-                }
-            })
+    // Effect: Trigger search when debounced query changes
+    // Only if the user typed something new (and it's not just the address we just set from a map click)
+    // To distinguish manual typing vs map click updates, we can check if query !== selectedAddress
+    // But simplest is just to search if query is valid and different from last search.
+    useEffect(() => {
+        if (debouncedQuery && debouncedQuery !== selectedAddress) {
+            handleSearch(debouncedQuery)
         }
-    }, [])
+    }, [debouncedQuery])
 
-    const onPlaceChanged = useCallback(() => {
-        if (autocompleteRef.current) {
-            const place = autocompleteRef.current.getPlace()
-            if (place.geometry && place.geometry.location) {
-                const lat = place.geometry.location.lat()
-                const lng = place.geometry.location.lng()
-                const newPos = { lat, lng }
-                setMarkerPosition(newPos)
-                setSelectedAddress(place.formatted_address || place.name || '')
-
-                if (map) {
-                    map.panTo(newPos)
-                    map.setZoom(15)
-                }
+    const handleSearch = async (searchText: string) => {
+        if (!searchText) return;
+        setIsSearching(true)
+        try {
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchText)}&limit=1`,
+                { headers: { 'User-Agent': 'EventVenuePlatform/1.0' } }
+            )
+            const data = await response.json()
+            if (data && data.length > 0) {
+                const lat = parseFloat(data[0].lat)
+                const lon = parseFloat(data[0].lon)
+                setCenter([lat, lon])
+                setMarkerPos([lat, lon])
+                // We typically don't update 'query' here to avoid loops if this was triggered by query change
+                // But we should update selectedAddress
+                // setSelectedAddress(searchText) // Optional, keeps it in sync
             }
+        } catch (error) {
+            console.error("Search failed:", error)
+        } finally {
+            setIsSearching(false)
         }
-    }, [map])
+    }
+
+    const handleMapClick = async (lat: number, lng: number) => {
+        setMarkerPos([lat, lng])
+        // Reverse Geocode
+        try {
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+                { headers: { 'User-Agent': 'EventVenuePlatform/1.0' } }
+            )
+            const data = await response.json()
+            if (data && data.display_name) {
+                const address = data.display_name
+                setQuery(address)
+                setSelectedAddress(address)
+            }
+        } catch (error) {
+            console.error("Reverse geocode failed:", error)
+        }
+    }
 
     const handleConfirm = () => {
-        onSelect(selectedAddress, markerPosition.lat, markerPosition.lng)
-    }
-
-    if (loadError) {
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-lg p-6 max-w-md w-full">
-                    <h3 className="text-lg font-semibold text-red-600 mb-2">Error Loading Maps</h3>
-                    <p className="text-gray-600 mb-4">
-                        Please add your Google Maps API key to .env.local:
-                    </p>
-                    <code className="block bg-gray-100 p-3 rounded text-sm mb-4">
-                        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_key_here
-                    </code>
-                    <p className="text-sm text-gray-500 mb-4">
-                        Get your free API key at: <br />
-                        <a href="https://console.cloud.google.com/" target="_blank" className="text-blue-600 hover:underline">
-                            console.cloud.google.com
-                        </a>
-                    </p>
-                    <button onClick={onClose} className="w-full bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700">
-                        Close
-                    </button>
-                </div>
-            </div>
-        )
-    }
-
-    if (!isLoaded) {
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-8">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Loading map...</p>
-                </div>
-            </div>
-        )
+        onSelect(selectedAddress || query, markerPos[0], markerPos[1])
+        onClose()
     }
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
+                <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
                     <div>
                         <h2 className="text-xl font-bold text-white">Select Location</h2>
                         <p className="text-blue-100 text-sm">Click on map or search for a place</p>
@@ -158,52 +164,51 @@ export default function MapModal({ currentAddress, onSelect, onClose }: MapModal
                 </div>
 
                 {/* Search Bar */}
-                <div className="p-4 border-b">
-                    <Autocomplete
-                        onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
-                        onPlaceChanged={onPlaceChanged}
-                    >
-                        <div className="relative">
-                            <MagnifyingGlassIcon className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                            <input
-                                type="text"
-                                placeholder="Search for a place..."
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                        </div>
-                    </Autocomplete>
+                <div className="p-4 border-b flex-shrink-0">
+                    <div className="relative">
+                        <MagnifyingGlassIcon className={`w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 ${isSearching ? 'text-blue-500 animate-pulse' : 'text-gray-400'}`} />
+                        <input
+                            type="text"
+                            placeholder="Search for a place (e.g. Hyderabad)..."
+                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                        />
+                        {isSearching && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                                Searching...
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {/* Map */}
-                <div className="relative">
-                    <GoogleMap
-                        mapContainerStyle={mapContainerStyle}
+                <div className="relative w-full h-[500px] bg-gray-100">
+                    <MapContainer
+                        center={center}
                         zoom={13}
-                        center={markerPosition}
-                        onClick={onMapClick}
-                        onLoad={setMap}
-                        options={{
-                            streetViewControl: false,
-                            mapTypeControl: false,
-                            fullscreenControl: false,
-                        }}
+                        style={{ height: '100%', width: '100%' }}
                     >
-                        <Marker
-                            position={markerPosition}
-                            draggable={true}
-                            onDragEnd={onMarkerDragEnd}
+                        <TileLayer
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         />
-                    </GoogleMap>
+                        <Marker position={markerPos} icon={icon} />
+                        <MapEvents onMapClick={handleMapClick} />
+                        <ChangeView center={center} zoom={13} />
+                    </MapContainer>
                 </div>
 
                 {/* Selected Address */}
-                <div className="p-4 bg-gray-50 border-t">
+                <div className="p-4 bg-gray-50 border-t flex-shrink-0">
                     <p className="text-sm text-gray-600 mb-1">Selected Location:</p>
-                    <p className="font-medium text-gray-900">{selectedAddress || 'Click on map to select'}</p>
+                    <p className="font-medium text-gray-900 line-clamp-2">
+                        {selectedAddress || query || 'Click on map to select'}
+                    </p>
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 bg-gray-50 flex gap-3 justify-end">
+                <div className="px-6 py-4 bg-gray-50 flex gap-3 justify-end flex-shrink-0">
                     <button
                         onClick={onClose}
                         className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
@@ -212,7 +217,7 @@ export default function MapModal({ currentAddress, onSelect, onClose }: MapModal
                     </button>
                     <button
                         onClick={handleConfirm}
-                        disabled={!selectedAddress}
+                        disabled={!selectedAddress && !query}
                         className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
                         Confirm Location
@@ -222,3 +227,4 @@ export default function MapModal({ currentAddress, onSelect, onClose }: MapModal
         </div>
     )
 }
+
