@@ -9,7 +9,12 @@
 
 # production
 /build
+
+# Markdown files (except README.md and .env.example)
 *.md
+!README.md
+!.env.example
+
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -35,6 +40,7 @@ next-env.d.ts
 /learning/
 /ai-plan/
 /docs/
+/PROJECT_DOCUMENTATION/
 
 # ALL documentation .md files (except README)
 
@@ -74,14 +80,36 @@ ARCHITECTURE*.md
 DIAGNOSTIC*.md
 ROADMAP*.md
 
+# Exclude unnecessary .txt files
+*.txt
+!package.json
+temp_*.txt
+cleaned_*.txt
+content_*.txt
+*_copy.txt
+compile_output.txt
+
+# Exclude .docx files
+*.docx
+
 # Backend documentation
 /backend/*.md
 !backend/README.md
 
-# Backend build files
+# Backend build files and logs
 /backend/target/
 /backend/.mvn/
 /backend/*.log
+/backend/*.txt
+/backend/compile_output.txt
+/backend/build_log.txt
+/backend/compile_error.txt
+/backend/error.log
+/backend/latest_error.txt
+/backend/mvn-output.txt
+/backend/startup.log
+/backend/hs_err_*.log
+/backend/replay_*.log
 
 # IDE files
 .idea/
