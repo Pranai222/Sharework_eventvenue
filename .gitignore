@@ -9,7 +9,7 @@
 
 # production
 /build
-
+*.md
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -37,7 +37,7 @@ next-env.d.ts
 /docs/
 
 # ALL documentation .md files (except README)
-*.md
+
 !README.md
 
 # Specifically exclude these patterns

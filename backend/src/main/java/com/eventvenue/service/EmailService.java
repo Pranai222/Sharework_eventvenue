@@ -15,8 +15,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class EmailService {
 
-    // Removed JavaMailSender
-    // private final JavaMailSender mailSender;
+    private final JavaMailSender mailSender;
 
     @Value("${app.name}")
     private String appName;
@@ -24,51 +23,10 @@ public class EmailService {
     @Value("${app.email}")
     private String fromEmail;
 
-    @Value("${google.client.id}")
-    private String clientId;
-
-    @Value("${google.client.secret}")
-    private String clientSecret;
-
-    @Value("${google.refresh.token}")
-    private String refreshToken;
-
     @Value("${app.url}")
     private String appUrl;
 
-    private com.google.api.services.gmail.Gmail gmailService;
 
-    @jakarta.annotation.PostConstruct
-    public void init() {
-        try {
-            com.google.api.client.http.javanet.NetHttpTransport httpTransport = 
-                com.google.api.client.googleapis.javanet.GoogleNetHttpTransport.newTrustedTransport();
-            
-            com.google.api.client.json.JsonFactory jsonFactory = 
-                com.google.api.client.json.gson.GsonFactory.getDefaultInstance();
-
-            com.google.api.client.auth.oauth2.TokenResponse tokenResponse = 
-                new com.google.api.client.auth.oauth2.TokenResponse();
-            tokenResponse.setRefreshToken(refreshToken);
-
-            com.google.api.client.googleapis.auth.oauth2.GoogleCredential credential = 
-                new com.google.api.client.googleapis.auth.oauth2.GoogleCredential.Builder()
-                .setTransport(httpTransport)
-                .setJsonFactory(jsonFactory)
-                .setClientSecrets(clientId, clientSecret)
-                .build()
-                .setFromTokenResponse(tokenResponse);
-
-            this.gmailService = new com.google.api.services.gmail.Gmail.Builder(
-                httpTransport, jsonFactory, credential)
-                .setApplicationName(appName)
-                .build();
-                
-            log.info("Gmail API Service initialized successfully");
-        } catch (Exception e) {
-            log.error("Failed to initialize Gmail API Service", e);
-        }
-    }
 
     /**
      * Send OTP verification email with welcome message
@@ -184,34 +142,22 @@ public class EmailService {
     }
 
     /**
-     * Send HTML email using Gmail API
+     * Send HTML email using JavaMailSender (SMTP)
      */
-    private void sendHtmlEmail(String to, String subject, String htmlContent) throws MessagingException, java.io.IOException {
-        if (gmailService == null) {
-            log.warn("Gmail Service not initialized. Skipping email to: {}", to);
-            return;
+    private void sendHtmlEmail(String to, String subject, String htmlContent) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+        
+        try {
+            helper.setFrom(fromEmail, appName);
+        } catch (java.io.UnsupportedEncodingException e) {
+            helper.setFrom(fromEmail);
         }
-
-        java.util.Properties props = new java.util.Properties();
-        jakarta.mail.Session session = jakarta.mail.Session.getDefaultInstance(props, null);
-
-        MimeMessage email = new MimeMessage(session);
-        // Set custom display name: "EventVenue Team <noreply@eventvenue.com>"
-        email.setFrom(new jakarta.mail.internet.InternetAddress(fromEmail, appName));
-        email.addRecipient(jakarta.mail.Message.RecipientType.TO, 
-            new jakarta.mail.internet.InternetAddress(to));
-        email.setSubject(subject);
-        email.setContent(htmlContent, "text/html; charset=utf-8");
-
-        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
-        email.writeTo(buffer);
-        byte[] bytes = buffer.toByteArray();
-        String encodedEmail = com.google.api.client.util.Base64.encodeBase64URLSafeString(bytes);
-
-        com.google.api.services.gmail.model.Message message = new com.google.api.services.gmail.model.Message();
-        message.setRaw(encodedEmail);
-
-        gmailService.users().messages().send("me", message).execute();
+        helper.setTo(to);
+        helper.setSubject(subject);
+        helper.setText(htmlContent, true); // true = HTML content
+        
+        mailSender.send(message);
     }
 
     /**
